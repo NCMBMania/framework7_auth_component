@@ -1,0 +1,199 @@
+<template>
+  <div class="page">
+    <div class="navbar">
+      <div class="navbar-bg"></div>
+      <div class="navbar-inner sliding">
+        <div class="title">フォーム</div>
+      </div>
+    </div>
+    <div class="page-content">
+      <form>
+        <div class="list">
+          <ul>
+            <li class="item-content item-input">
+              <div class="item-inner">
+                <div class="item-title item-label">テキスト</div>
+                <div class="item-input-wrap">
+                  <input type="text" name="text" placeholder="テキストデータ" value="テキスト" />
+                </div>
+              </div>
+            </li>
+            <li class="item-content item-input">
+              <div class="item-inner">
+                <div class="item-title item-label">数値</div>
+                <div class="item-input-wrap">
+                  <input type="number" name="number" placeholder="0" value="100" />
+                </div>
+              </div>
+            </li>
+            <li class="item-content item-input">
+              <div class="item-inner">
+                <div class="item-title item-label">日付</div>
+                <div class="item-input-wrap">
+                  <input type="date" name="date" placeholder="2022-01-01" value="2022-01-15" />
+                </div>
+              </div>
+            </li>
+            <li>
+              <div class="block-title">チェックボックス</div>
+              <label class="item-radio item-radio-icon-start item-content">
+                <input type="radio" name="boolean" value="true" checked="checked" />
+                <i class="icon icon-radio"></i>
+                <div class="item-inner">
+                  <div class="item-title">True</div>
+                </div>
+              </label>
+              <label class="item-radio item-radio-icon-start item-content">
+                <input type="radio" name="boolean" value="false" />
+                <i class="icon icon-radio"></i>
+                <div class="item-inner">
+                  <div class="item-title">False</div>
+                </div>
+              </label>
+            </li>
+            <li class="item-content item-input">
+              <div class="item-inner">
+                <div class="item-title item-label">写真</div>
+                <div class="item-input-wrap">
+                  <i class="f7-icons size-150" @click=${openFilePicker}>camera</i>
+                  <img width="150px" height="150px" style="object-fit: cover; display: none;" @click=${openFilePicker} />
+                  <span style="display: none;">
+                    <input type="file" name="photo" accept="image/*" @change=${selectPhoto} />
+                  </span>
+                </div>
+              </div>
+            </li>
+            <li>
+              <a href="#" class="item-link list-button login-button" @click=${save}>データを作成する</a>
+            </li>
+          </ul>
+        </div>
+      </form>
+    </div>
+  </div>
+</template>
+<style>
+  .size-150 {
+    font-size: 150px;
+  }
+</style>
+<script>
+  export default function (props, {$f7, $f7router, $update }) {
+    // 登録対象のクラス名
+    const { className } = props;
+    // データの保存処理
+    const save = async (e) => {
+      $f7.dialog.preloader(); // 処理中ダイアログの表示
+      try {
+        // フォームからオブジェクトに変換
+        const params = formToObject($(e.target).parents('form')[0]);
+        // データストアの新規データ生成
+        const obj = new (ncmb.DataStore(className));
+        // データを登録
+        for (const key in params) {
+          obj.set(key, params[key]);
+        }
+        // ACLを設定
+        obj.set('acl', getAcl());
+        // 保存実行
+        await obj.save();
+        // 処理中ダイアログを閉じる
+        $f7.dialog.close();
+        // アラート表示
+        app.dialog.alert('データを登録しました', '新規保存');
+      } catch (e) {
+        // 処理中ダイアログを閉じる
+        $f7.dialog.close();
+        // アラート表示
+        app.dialog.alert(`データの登録に失敗しました<br />${e.message}`, 'エラー');
+      }
+    };
+
+    // フォームのデータをオブジェクトに変換する関数
+    const formToObject = (form) => {
+      const obj = {};
+      Array.prototype.slice.call(form.elements).forEach(ele => {
+        const { name } = ele;
+        switch (ele.type) {
+        case 'text': // テキストの場合
+          obj[name] = ele.value;
+          break;
+        case 'number': // 数値の場合
+          if (ele.value !== '') {
+            obj[name] = parseFloat(ele.value);
+          }
+          break;
+        case 'date': // 日付の場合
+          if (ele.value !== '') {
+            obj[name] = new Date(ele.value);
+          }
+          break;
+        case 'radio': // ラジオの場合
+          if (ele.checked) {
+            obj[name] = ele.value === 'true';
+          }
+          break;
+        case 'file': // ファイルの場合
+          const file = ele.files[0];
+          if (!file) break;
+          // 拡張子を取得
+          const ext = file.name.replace(/.*\.(.*)$/, "$1");
+          // ランダムな文字列を作成
+          const random = Math.random().toString(32).substring(2);
+          // ファイル名を作成
+          const fileName = `${(new Date).getTime()}-${random}.${ext}`;
+          // アップロードを実行
+          ncmb.File.upload(fileName, file, getAcl());
+          obj[name] = fileName;
+          break;
+        }
+      });
+      return obj;
+    }
+
+    // ACLを生成する関数（ここはアプリごとに変更してください）
+    const getAcl = () => {
+      const acl = new ncmb.Acl;
+      const user = ncmb.User.getCurrentUser();
+      if (user) {
+        // 認証している場合はその人だけが読み書きを可能に
+        acl
+          .setUserReadAccess(user, true)
+          .setUserWriteAccess(user, true);
+      } else {
+        // 認証していない場合は読み込み権限のみ
+        acl
+          .setPublicReadAccess(true);
+      }
+      return acl;
+    };
+
+    // ファイル選択ダイアログを開く
+    const openFilePicker = (e) => {
+      $(e.target).parents('div').find('[type="file"]').click();
+    };
+
+    // 写真を選択した後の処理
+    const selectPhoto = async (e) => {
+      const file = await loadPhoto(e);
+      // 元々のカメラアイコンを非表示に
+      const div = $(e.target).parents('div');
+      div.find('.f7-icons').hide();
+      // 画像をプレビュー表示
+      div.find('img').attr('src', file).show();
+    };
+
+    // 選択した写真を読み込む関数
+    const loadPhoto = (e) => {
+      return new Promise((res, rej) => {
+        const file = e.target.files[0];
+        const reader = new FileReader;
+        reader.addEventListener("load", () => {
+          res(reader.result);
+        }, false);
+        reader.readAsDataURL(file);
+      });
+    };
+    return $render;
+  }
+</script>

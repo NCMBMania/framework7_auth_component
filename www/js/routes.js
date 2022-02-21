@@ -5,8 +5,8 @@ var routes = [
     url: './index.html',
   },
   {
-    path: '/auth',
-    componentUrl: './pages/auth.html',
+    path: '/form/:className',
+    componentUrl: './pages/form.html',
   },
   {
     path: '(.*)',
